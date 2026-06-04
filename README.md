@@ -5,7 +5,7 @@
 在終端機貼上以下指令，一鍵完成：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/samwang38/north1-weekly-report/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Harveyzxc15/north2-weekly-report/main/install.sh | bash
 ```
 
 安裝完成後，桌面會出現 `北二區週報-app` 資料夾，雙擊其中的 `啟動北二區週報.command` 即可使用。

@@ -2,7 +2,7 @@
 # 北二區週報產生器 — 一鍵安裝腳本
 set -e
 
-REPO="https://github.com/samwang38/north1-weekly-report.git"
+REPO="https://github.com/Harveyzxc15/north2-weekly-report.git"
 DEST="$HOME/Desktop/北二區週報-app"
 
 echo "==================================="
