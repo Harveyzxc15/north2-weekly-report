@@ -1,0 +1,3 @@
+__pycache__/
+*.class
+data/traffic_cache.json
