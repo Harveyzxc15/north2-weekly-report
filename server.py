@@ -536,6 +536,8 @@ def _fill_workbook(wk_end: date, log, use_full_month: bool = False,
     ws_misc = wb['BY店 本週其他細項']
     for ri, code in enumerate(rows_stores):
         r = 3 + ri; m = MISC_WK[code]
+        _nm = eng.STORES.get(code, 'Total')   # 門市名稱（三個並排小表：A/I/P 欄）
+        ws_misc.cell(r, 1).value = _nm; ws_misc.cell(r, 9).value = _nm; ws_misc.cell(r, 16).value = _nm
         ws_misc.cell(r,  2).value = m['sa_mac'];      ws_misc.cell(r,  3).value = m['sa_iphone']
         ws_misc.cell(r,  4).value = m['sa_ipad'];     ws_misc.cell(r,  5).value = m['sa_watch']
         ws_misc.cell(r,  6).value = m['sa_airpods'];  ws_misc.cell(r,  7).value = m['sa_total']
@@ -545,6 +547,7 @@ def _fill_workbook(wk_end: date, log, use_full_month: bool = False,
         ws_misc.cell(r, 17).value = m['host_total']
     for ri, code in enumerate(rows_stores):
         r = 14 + ri; pw_m = MISC_PW[code]; wk_m = MISC_WK[code]
+        ws_misc.cell(r, 1).value = eng.STORES.get(code, 'Total')
         ws_misc.cell(r, 2).value = pw_m['spk_with'];   ws_misc.cell(r, 3).value = wk_m['spk_with']
         ws_misc.cell(r, 4).value = pct(wk_m['spk_with'], pw_m['spk_with'])
         ws_misc.cell(r, 5).value = wk_m['spk_with'] - pw_m['spk_with']
@@ -553,6 +556,7 @@ def _fill_workbook(wk_end: date, log, use_full_month: bool = False,
         ws_misc.cell(r, 9).value = wk_m['spk_without'] - pw_m['spk_without']
     for ri, code in enumerate(rows_stores):
         r = 25 + ri; pw_m = MISC_PW[code]; wk_m = MISC_WK[code]
+        ws_misc.cell(r, 1).value = eng.STORES.get(code, 'Total')
         ws_misc.cell(r,  2).value = pw_m['iphone_host'];     ws_misc.cell(r, 12).value = wk_m['iphone_host']
         ws_misc.cell(r,  3).value = pw_m['iphone_prot_qty']; ws_misc.cell(r, 13).value = wk_m['iphone_prot_qty']
         ws_misc.cell(r,  4).value = pw_m['iphone_case_qty']; ws_misc.cell(r, 14).value = wk_m['iphone_case_qty']
@@ -574,6 +578,7 @@ def _fill_workbook(wk_end: date, log, use_full_month: bool = False,
         ws_misc.cell(r, 27).value = wk_m['iphone_lens_rev']-pw_m['iphone_lens_rev']
     for ri, code in enumerate(rows_stores):
         r = 36 + ri; pw_m = MISC_PW[code]; wk_m = MISC_WK[code]
+        ws_misc.cell(r, 1).value = eng.STORES.get(code, 'Total')
         ws_misc.cell(r,  2).value = pw_m['ipad_host'];  ws_misc.cell(r, 13).value = wk_m['ipad_host']
         ws_misc.cell(r,  3).value = pw_m['ipad_pencil1']; ws_misc.cell(r, 14).value = wk_m['ipad_pencil1']
         ws_misc.cell(r,  4).value = rate(pw_m['ipad_pencil1'], pw_m['ipad_host'])
@@ -592,6 +597,7 @@ def _fill_workbook(wk_end: date, log, use_full_month: bool = False,
         ws_misc.cell(r, 23).value = rate(wk_m['ipad_kb'], wk_m['ipad_host'])
     for ri, code in enumerate(rows_stores):
         r = 47 + ri; pw_m = MISC_PW[code]; wk_m = MISC_WK[code]
+        ws_misc.cell(r, 1).value = eng.STORES.get(code, 'Total')
         ws_misc.cell(r, 2).value = pw_m['watch_host'];  ws_misc.cell(r, 7).value = wk_m['watch_host']
         ws_misc.cell(r, 3).value = pw_m['watch_prot'];  ws_misc.cell(r, 8).value = wk_m['watch_prot']
         ws_misc.cell(r, 4).value = rate(pw_m['watch_prot'], pw_m['watch_host'])
