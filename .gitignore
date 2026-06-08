@@ -1,3 +1,4 @@
 __pycache__/
 *.class
 data/traffic_cache.json
+local_config.json
