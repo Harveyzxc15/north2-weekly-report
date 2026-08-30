@@ -159,6 +159,12 @@ def _fill_workbook(wk_end: date, log, use_full_month: bool = False,
         LYW_START = WK_START - timedelta(weeks=52)
         LYW_END   = wk_end   - timedelta(weeks=52)
 
+    # 季累積（QTD）：財年季起始日 ~ 本週結束日。
+    # 季 = 13 個「週日～週六」，任何一週都完整落在單一季內，不會跨季。
+    # 刻意不受 use_full_month 影響 —— 那會把還沒發生的日子算進搭售佔比。
+    FY, FQ, FQW, QTD_START, _Q_END = eng.fiscal_period(wk_end)
+    QTD_END = wk_end
+
     STORE_CODES = list(eng.STORES.keys())
 
     log(f'本週: {WK_START} ~ {wk_end}  |  上週: {PW_START} ~ {PW_END}')
@@ -169,7 +175,10 @@ def _fill_workbook(wk_end: date, log, use_full_month: bool = False,
     # 跨月週(如 6/28~7/4)時 YTD_E_CY=MTD_END=6/30，載入須延伸到 wk_end 才不會漏本週的 7 月資料
     cy_end = max(wk_end, MTD_END, YTD_E_CY)
     # 1 月的週報「上週/上月/上月同期」落在去年 12 月，起始日也要往前延伸才不會整欄變 0
-    cy_start = min(YTD_S_CY, WK_START, PW_START, MTD_START, PM_START, PM_SAME_START)
+    # QTD_START 必須納入：跨年的季（如 FY27 Q2 起於 2026-12-27）會早於 YTD_S_CY，
+    # 漏掉就是「1 月週報缺料」那類截斷 bug 的翻版。
+    cy_start = min(YTD_S_CY, WK_START, PW_START, MTD_START, PM_START, PM_SAME_START,
+                   QTD_START)
     df_cy = eng.load_from_epb(cy_start, cy_end, store_codes=STORE_CODES)
     log(f'  今年資料：{len(df_cy):,} 筆')
 
@@ -198,6 +207,7 @@ def _fill_workbook(wk_end: date, log, use_full_month: bool = False,
         'pm':      (df_cy, PM_START,      PM_END),
         'lyw':     (df_ly, LYW_START,     LYW_END),
         'lymo':    (df_ly, LYMO_START,    LYMO_END),
+        'qtd':     (df_cy, QTD_START,     QTD_END),
         'ytd_cy':  (df_cy, YTD_S_CY,      YTD_E_CY),
         'ytd_ly':  (df_ly, YTD_S_LY,      YTD_E_LY),
     }
@@ -544,12 +554,6 @@ def _fill_workbook(wk_end: date, log, use_full_month: bool = False,
 
     # ── 配件 sheets ──────────────────────────────────────────────
     log('填入配件 sheets…')
-    ws_sum = wb['配件-北二區 (匯總)']
-    fill_acc_section(ws_sum, 4, 0, 'ALL')
-    fill_acc_section(ws_sum, 23, 0,  '009'); fill_acc_section(ws_sum, 23, 17, '025')
-    fill_acc_section(ws_sum, 42, 0,  '050'); fill_acc_section(ws_sum, 42, 17, '055')
-    fill_acc_section(ws_sum, 61, 0,  '063'); fill_acc_section(ws_sum, 61, 17, '064')
-    fill_acc_section(ws_sum, 80, 0,  '068')   # 第 7 店：第 4 段左欄
     fill_acc_section(wb['配件-北二區'], 4, 0, 'ALL')
     for code, sname in [('009','配件 - 永和門市'), ('025','配件 - 板橋誠品門市'),
                         ('050','配件 - 西門門市'), ('055','配件 - 花蓮門市'),
@@ -630,35 +634,35 @@ def _fill_workbook(wk_end: date, log, use_full_month: bool = False,
         ws_misc.cell(r, 25).value = wk_m['iphone_prot_rev']-pw_m['iphone_prot_rev']
         ws_misc.cell(r, 26).value = wk_m['iphone_case_rev']-pw_m['iphone_case_rev']
         ws_misc.cell(r, 27).value = wk_m['iphone_lens_rev']-pw_m['iphone_lens_rev']
-    for ri, code in enumerate(rows_stores):
-        r = 36 + ri; pw_m = MISC_PW[code]; wk_m = MISC_WK[code]
-        ws_misc.cell(r, 1).value = eng.STORES.get(code, 'Total')
-        ws_misc.cell(r,  2).value = pw_m['ipad_host'];  ws_misc.cell(r, 13).value = wk_m['ipad_host']
-        ws_misc.cell(r,  3).value = pw_m['ipad_pencil1']; ws_misc.cell(r, 14).value = wk_m['ipad_pencil1']
-        ws_misc.cell(r,  4).value = rate(pw_m['ipad_pencil1'], pw_m['ipad_host'])
-        ws_misc.cell(r,  5).value = pw_m['ipad_pencil3']; ws_misc.cell(r, 16).value = wk_m['ipad_pencil3']
-        ws_misc.cell(r,  6).value = rate(pw_m['ipad_pencil3'], pw_m['ipad_host'])
-        ws_misc.cell(r,  7).value = pw_m['ipad_prot_qty']; ws_misc.cell(r, 18).value = wk_m['ipad_prot_qty']
-        ws_misc.cell(r,  8).value = rate(pw_m['ipad_prot_qty'], pw_m['ipad_host'])
-        ws_misc.cell(r,  9).value = pw_m['ipad_case_qty']; ws_misc.cell(r, 20).value = wk_m['ipad_case_qty']
-        ws_misc.cell(r, 10).value = rate(pw_m['ipad_case_qty'], pw_m['ipad_host'])
-        ws_misc.cell(r, 11).value = pw_m['ipad_kb'];    ws_misc.cell(r, 22).value = wk_m['ipad_kb']
-        ws_misc.cell(r, 12).value = rate(pw_m['ipad_kb'], pw_m['ipad_host'])
-        ws_misc.cell(r, 15).value = rate(wk_m['ipad_pencil1'], wk_m['ipad_host'])
-        ws_misc.cell(r, 17).value = rate(wk_m['ipad_pencil3'], wk_m['ipad_host'])
-        ws_misc.cell(r, 19).value = rate(wk_m['ipad_prot_qty'], wk_m['ipad_host'])
-        ws_misc.cell(r, 21).value = rate(wk_m['ipad_case_qty'], wk_m['ipad_host'])
-        ws_misc.cell(r, 23).value = rate(wk_m['ipad_kb'], wk_m['ipad_host'])
-    for ri, code in enumerate(rows_stores):
-        r = 47 + ri; pw_m = MISC_PW[code]; wk_m = MISC_WK[code]
-        ws_misc.cell(r, 1).value = eng.STORES.get(code, 'Total')
-        ws_misc.cell(r, 2).value = pw_m['watch_host'];  ws_misc.cell(r, 7).value = wk_m['watch_host']
-        ws_misc.cell(r, 3).value = pw_m['watch_prot'];  ws_misc.cell(r, 8).value = wk_m['watch_prot']
-        ws_misc.cell(r, 4).value = rate(pw_m['watch_prot'], pw_m['watch_host'])
-        ws_misc.cell(r, 5).value = pw_m['watch_band'];  ws_misc.cell(r,10).value = wk_m['watch_band']
-        ws_misc.cell(r, 6).value = rate(pw_m['watch_band'], pw_m['watch_host'])
-        ws_misc.cell(r, 9).value = rate(wk_m['watch_prot'], wk_m['watch_host'])
-        ws_misc.cell(r,11).value = rate(wk_m['watch_band'], wk_m['watch_host'])
+    def _fill_misc_acc(row_start, host_key, items):
+        """填 iPad / Watch / CPU 配件子表（版面比照 iPhone 子表）。
+
+        每期間 1+3N 欄：台數、N 個數量、N 個金額、N 個佔比；之後 N 欄差異數量、
+        N 欄差異金額。佔比與差異在範本裡已是 Excel 公式，這裡只寫台數/數量/金額。
+        items = [(數量 key, 金額 key), ...]
+        """
+        N = len(items)
+        per = 1 + 3 * N
+        # 只填門市列，Total 列留給範本裡的 SUM 公式（衍生格一律用公式）
+        for ri, code in enumerate(STORE_CODES):
+            r = row_start + ri
+            ws_misc.cell(r, 1).value = eng.STORES.get(code, 'Total')
+            for base, m in ((2, MISC_PW[code]), (2 + per, MISC_WK[code])):
+                ws_misc.cell(r, base).value = m[host_key]
+                for i, (q_key, rev_key) in enumerate(items):
+                    ws_misc.cell(r, base + 1 + i).value = m[q_key]
+                    ws_misc.cell(r, base + 1 + N + i).value = m[rev_key]
+
+    _fill_misc_acc(36, 'ipad_host', [
+        ('ipad_pencil1', 'ipad_pencil1_rev'), ('ipad_pencil3', 'ipad_pencil3_rev'),
+        ('ipad_prot_qty', 'ipad_prot_rev'),   ('ipad_case_qty', 'ipad_case_rev'),
+        ('ipad_kb', 'ipad_kb_rev')])
+    _fill_misc_acc(47, 'watch_host', [
+        ('watch_prot', 'watch_prot_rev'), ('watch_band', 'watch_band_rev')])
+    _fill_misc_acc(58, 'cpu_host', [
+        ('cpu_prot_qty', 'cpu_prot_rev'),       ('cpu_bag_qty', 'cpu_bag_rev'),
+        ('cpu_kbfilm_qty', 'cpu_kbfilm_rev'),   ('cpu_adapter_qty', 'cpu_adapter_rev'),
+        ('cpu_office_qty', 'cpu_office_rev')])
 
     # ── BY店 人員銷售 ─────────────────────────────────────────────
     log('填入 BY店 人員銷售…')
@@ -874,6 +878,27 @@ def _fill_workbook(wk_end: date, log, use_full_month: bool = False,
 
     def _d(d): return f'{d.month:02d}/{d.day:02d}'
 
+    # ── 重點項目進度（季累積 AC+ 搭售佔比 + ARpedia）────────────────
+    log('填入 重點項目進度…')
+    ws_prog = wb['重點項目進度']
+    # CPU 分母排除認證機（與每日追蹤主機報表同口徑）；其餘品類無認證機問題
+    _prog_cats = [('CPU', 'acpp_mac', 'cpu_units_excl_cert'), ('iPad', 'acpp_ipad', 'ipad_units'),
+                  ('iPhone', 'acpp_iphone', 'iphone_units'), ('Watch', 'acpp_watch', 'watch_units'),
+                  ('AirPods', 'acpp_airpods', 'airpods_units')]
+    ws_prog.cell(1, 1).value = (f'{str(FY)[2:]}Q{FQ}  AC+ 搭售佔比  ·  '
+                                f'{QTD_START.year}/{_d(QTD_START)} ~ {_d(QTD_END)}')
+    ws_prog.cell(9, 1).value = f'Q{FQ}W{FQW:02d} 重點項目進度'
+    # 佔比本身是公式，這裡只寫下方明細區的分子（AC+ 台數 r17~21）與分母（主機台數 r24~28）
+    for i, (_cat, acpp_key, host_key) in enumerate(_prog_cats):
+        for ci, code in enumerate(rows_stores):
+            m = M['qtd'][code]
+            ws_prog.cell(17 + i, 2 + ci).value = m[acpp_key]
+            ws_prog.cell(24 + i, 2 + ci).value = m[host_key]
+    # ARpedia：本週 / 本月 / 年度（只列門市，不含全區合計）
+    for i, period in enumerate(['wk', 'mtd', 'ytd_cy']):
+        for ci, code in enumerate(STORE_CODES):
+            ws_prog.cell(11 + i, 2 + ci).value = M[period][code]['arpedia_units']
+
     def _set_acc_dates(ws, off):
         ws.cell(3, off+3).value  = f'{_d(PW_START)}~{_d(PW_END)}'
         ws.cell(3, off+4).value  = f'{_d(WK_START)}~{_d(wk_end)}'
@@ -883,7 +908,7 @@ def _fill_workbook(wk_end: date, log, use_full_month: bool = False,
         ws.cell(3, off+14).value = f'{YTD_S_LY.year}/{_d(YTD_S_LY)}~{_d(YTD_E_LY)}'
         ws.cell(3, off+15).value = f'{YTD_S_CY.year}/{_d(YTD_S_CY)}~{_d(YTD_E_CY)}'
 
-    for sname, label in [('配件-北二區 (匯總)','北二區'), ('配件-北二區','北二區'),
+    for sname, label in [('配件-北二區','北二區'),
                           ('配件 - 永和門市','永和門市'), ('配件 - 板橋誠品門市','板橋誠品門市'),
                           ('配件 - 西門門市','西門門市'), ('配件 - 花蓮門市','花蓮門市'),
                           ('配件 - 板橋遠百門市','板橋遠百門市'), ('配件 - 新莊宏匯門市','新莊宏匯門市'),
@@ -892,14 +917,14 @@ def _fill_workbook(wk_end: date, log, use_full_month: bool = False,
         ws_d = wb[sname]
         ws_d.cell(1,1).value = f'配件銷售分析  ·  {label}  ·  {WK_START.year}/{_d(WK_START)} ~ {_d(wk_end)}'
         _set_acc_dates(ws_d, 0)
-        if sname == '配件-北二區 (匯總)': _set_acc_dates(ws_d, 17)
 
     ws_misc.cell(1,1).value = f'本週其他細項  ·  本週 {_d(WK_START)}~{_d(wk_end)}  |  對照 上週 {_d(PW_START)}~{_d(PW_END)}'
 
     # 配件區塊小標題（iPhone/iPad/Watch）：上週/本週日期
     _misc_pw = f'上週 {_d(PW_START)}~{_d(PW_END)}'
     _misc_wk = f'本週 {_d(WK_START)}~{_d(wk_end)}'
-    for _r, _c_pw, _c_wk in [(23, 2, 12), (34, 2, 13), (45, 2, 7)]:
+    # (標題列, 上週起始欄, 本週起始欄) —— 本週欄 = 2 + (1+3×品項數)
+    for _r, _c_pw, _c_wk in [(23, 2, 12), (34, 2, 18), (45, 2, 9), (56, 2, 18)]:
         ws_misc.cell(_r, _c_pw).value = _misc_pw
         ws_misc.cell(_r, _c_wk).value = _misc_wk
 
@@ -926,8 +951,9 @@ def _fill_workbook(wk_end: date, log, use_full_month: bool = False,
     pm_s_ymd=f'{PM_SAME_START.year}\n{pm_s_lbl}'; mtd_ymd=f'{MTD_START.year}\n{mtd_lbl}'
     for c in range(1, ws_mo.max_column+1):
         if ws_mo.cell(14,c).value is None: continue
-        if c in {2,5,8,11,14}:  ws_mo.cell(14,c).value = pm_s_ymd
-        elif c in {3,6,9,12,15}: ws_mo.cell(14,c).value = mtd_ymd
+        # 26/27 = 平均單價的對照期/本期，早期漏列導致日期永遠停在範本殘值
+        if c in {2,5,8,11,14,26}:  ws_mo.cell(14,c).value = pm_s_ymd
+        elif c in {3,6,9,12,15,27}: ws_mo.cell(14,c).value = mtd_ymd
     ws_mo.cell(24,1).value = f'{MTD_START.year}\n{mtd_lbl}'
     ws_mo.cell(34,1).value = f'{PM_SAME_START.year}\n{pm_s_lbl}'
 
@@ -944,8 +970,9 @@ def _fill_workbook(wk_end: date, log, use_full_month: bool = False,
     ly_ymd=f'{LYMO_START.year}\n{ly_lbl}'; cy_ymd=f'{MTD_START.year}\n{mtd_lbl}'
     for c in range(1, ws_ly.max_column+1):
         if ws_ly.cell(14,c).value is None: continue
-        if c in {2,5,8,11,14}:  ws_ly.cell(14,c).value = ly_ymd
-        elif c in {3,6,9,12,15}: ws_ly.cell(14,c).value = cy_ymd
+        # 26/27 = 平均單價的對照期/本期，早期漏列導致日期永遠停在範本殘值
+        if c in {2,5,8,11,14,26}:  ws_ly.cell(14,c).value = ly_ymd
+        elif c in {3,6,9,12,15,27}: ws_ly.cell(14,c).value = cy_ymd
     ws_ly.cell(24,1).value = f'{MTD_START.year}\n{mtd_lbl}'
     ws_ly.cell(34,1).value = f'{LYMO_START.year}\n{ly_lbl}'
     # 第3列右半（3PP搭售率/SA Care搭售率/禮券金額）年份標籤：24/26/28=去年, 25/27/29=今年
@@ -961,11 +988,14 @@ def _fill_workbook(wk_end: date, log, use_full_month: bool = False,
             base = '\n'.join(parts[:-2])
             if c in {2,5,8,11,14,17}:   ws_yoy.cell(3,c).value = f'{base}\n{YTD_S_LY.year}\n{ytd_ly_lbl}'
             elif c in {3,6,9,12,15,18}: ws_yoy.cell(3,c).value = f'{base}\n{YTD_S_CY.year}\n{ytd_cy_lbl}'
+    ws_yoy.cell(1,1).value = (f'整年同期對照  ·  {YTD_S_CY.year}/{ytd_cy_lbl}'
+                              f'  vs  {YTD_S_LY.year}/{ytd_ly_lbl}')
     ytd_ly_ymd=f'{YTD_S_LY.year}\n{ytd_ly_lbl}'; ytd_cy_ymd=f'{YTD_S_CY.year}\n{ytd_cy_lbl}'
     for c in range(1, ws_yoy.max_column+1):
         if ws_yoy.cell(14,c).value is None: continue
-        if c in {2,5,8,11,14}:  ws_yoy.cell(14,c).value = ytd_ly_ymd
-        elif c in {3,6,9,12,15}: ws_yoy.cell(14,c).value = ytd_cy_ymd
+        # 26/27 = 平均單價的對照期/本期，早期漏列導致日期永遠停在範本殘值
+        if c in {2,5,8,11,14,26}:  ws_yoy.cell(14,c).value = ytd_ly_ymd
+        elif c in {3,6,9,12,15,27}: ws_yoy.cell(14,c).value = ytd_cy_ymd
     ws_yoy.cell(24,1).value = f'{YTD_S_CY.year}\n{ytd_cy_lbl}'
     ws_yoy.cell(34,1).value = f'{YTD_S_LY.year}\n{ytd_ly_lbl}'
     # 第3列右半（3PP搭售率/SA Care搭售率/禮券金額）年份標籤：24/26/28=去年, 25/27/29=今年
@@ -1005,7 +1035,34 @@ def _verify_structure(wb, rows_stores, log):
         if sname not in wb.sheetnames:
             issues.append(f'缺少配件分頁「{sname}」')
 
-    # 3. 本週比較第 3 列要有日期字樣（確認日期標題有更新）
+    # 3. 「BY店 本週其他細項」六個子表的店名都落在正確列
+    #    （這張表的列位置在 server.py 是寫死的，填錯格不會有任何錯誤訊息）
+    if 'BY店 本週其他細項' not in wb.sheetnames:
+        issues.append('缺少分頁「BY店 本週其他細項」')
+    else:
+        ws_m = wb['BY店 本週其他細項']
+        for first_row, label in [(3, 'SAcare檢測新機'), (14, '喇叭'), (25, 'iPhone配件'),
+                                 (36, 'iPad配件'), (47, 'Watch配件'), (58, 'CPU配件')]:
+            got = [str(ws_m.cell(first_row + i, 1).value or '').strip()
+                   for i in range(len(expect_names))]
+            if got != expect_names:
+                issues.append(f'「本週其他細項」{label} 子表(第 {first_row} 列起)店名對不上：'
+                              f'預期{expect_names}，實得{got}')
+
+    # 4. 「重點項目進度」分頁存在且門市標題正確
+    if '重點項目進度' not in wb.sheetnames:
+        issues.append('缺少分頁「重點項目進度」')
+    else:
+        ws_p = wb['重點項目進度']
+        store_names = [eng.STORES[c] for c in rows_stores if c != 'ALL']
+        for hdr_row in (2, 10, 16, 23):
+            got = [str(ws_p.cell(hdr_row, 2 + i).value or '').strip()
+                   for i in range(len(store_names))]
+            if got != store_names:
+                issues.append(f'「重點項目進度」第 {hdr_row} 列門市標題對不上：'
+                              f'預期{store_names}，實得{got}')
+
+    # 5. 本週比較第 3 列要有日期字樣（確認日期標題有更新）
     ws_wk = wb['BY店 本週比較']
     if not any('~' in str(ws_wk.cell(3, c).value or '') for c in range(1, 33)):
         issues.append('「BY店 本週比較」第 3 列找不到日期區間，標題可能沒更新')
