@@ -196,19 +196,21 @@ def _urlopen_retry(req, ctx, log, tries=2):
     raise last
 
 
-def _query_daily(site_id, start: date, end: date, auth, tenant, log):
-    """打 REST API 取每日 traffic，回傳 {date: traffic}。"""
+def _query_daily(start: date, end: date, auth, tenant, log):
+    """打 REST API 取全組織各店每日 traffic，回傳 {siteId: {date: traffic}}。
+    2026-10 起單店端點 /sites/{siteId} 後端查營業時間一律 401，改用網站自己用的 /sites/by-tag。"""
     import urllib.request, urllib.error, json as _json, ssl
     # 公司 VPN(Fortinet) 會做 SSL 檢查插入自簽憑證 → 關閉憑證驗證才連得到
     _ctx = ssl.create_default_context()
     _ctx.check_hostname = False
     _ctx.verify_mode = ssl.CERT_NONE
-    url = f"{API_BASE}/api/v1/kpis/organizations/{ORG_ID}/sites/{site_id}"
+    url = f"{API_BASE}/api/v1/kpis/organizations/{ORG_ID}/sites/by-tag"
     body = _json.dumps({
         "groupBy": "day",
         "operatingHours": True,
+        "org_level": True,
         "reportStartDate": f"{start.isoformat()}T00:00:00.000Z",
-        "reportEndDate":   f"{end.isoformat()}T00:00:00.000Z",
+        "reportEndDate":   f"{end.isoformat()}T23:59:59.999Z",
         "add_aggregated_data": True,
         "kpi": ["traffic"],
     }).encode("utf-8")
@@ -225,36 +227,45 @@ def _query_daily(site_id, start: date, end: date, auth, tenant, log):
             raise PermissionError("token expired") from e
         raise
     rows = (((data.get("result") or [{}])[0]).get("currentPeriod") or {}).get("data") or []
-    return {d.get("day"): int(d.get("traffic") or 0) for d in rows if d.get("day")}
+    by_site = {}
+    for d in rows:
+        if d.get("day") and d.get("site_id"):
+            by_site.setdefault(d["site_id"], {})[d["day"]] = int(d.get("traffic") or 0)
+    return by_site
 
 
 def fetch_all(store_codes, start: date, end: date, username, password, log, starts=None):
     """登入並抓多店每日來客數，回傳 {storeCode: {date: traffic}}。失敗丟 ShopperTrakError。
     starts={storeCode: date} 可個別指定起日（只補快取缺的部分），沒給的用 start。"""
+    codes = [c for c in store_codes if c in SITE_IDS]
+    if not codes:
+        return {}
+    begin = {c: (starts or {}).get(c, start) for c in codes}
     auth, tenant = _ensure_token(username, password, log)
     out, failed = {}, []
-    for code in store_codes:
-        site = SITE_IDS.get(code)
-        if not site:
-            continue
-        s = (starts or {}).get(code, start)
+    try:
         try:
-            try:
-                days = _query_daily(site, s, end, auth, tenant, log)
-            except PermissionError:
-                auth, tenant = _ensure_token(username, password, log, force=True)
-                days = _query_daily(site, s, end, auth, tenant, log)
-            if days:
-                out[code] = days
-                log(f"  來客數 {code}: {len(days)} 天")
-            else:
-                failed.append(code)
-                log(f"  來客數 {code}：查無資料")
-        except ShopperTrakError:
-            raise                       # DNS 這類問題每店都會一樣，不必重複跑完
-        except Exception as e:
+            by_site = _query_daily(min(begin.values()), end, auth, tenant, log)
+        except PermissionError:
+            auth, tenant = _ensure_token(username, password, log, force=True)
+            by_site = _query_daily(min(begin.values()), end, auth, tenant, log)
+    except ShopperTrakError:
+        raise                           # DNS 這類問題直接往上丟
+    except Exception as e:
+        log(f"  來客數查詢失敗：{e}")
+        by_site = None
+    for code in codes:
+        if by_site is None:
             failed.append(code)
-            log(f"  來客數 {code} 失敗：{e}")
+            continue
+        lo, hi = begin[code].isoformat(), end.isoformat()
+        days = {d: v for d, v in by_site.get(SITE_IDS[code], {}).items() if lo <= d <= hi}
+        if days:
+            out[code] = days
+            log(f"  來客數 {code}: {len(days)} 天")
+        else:
+            failed.append(code)
+            log(f"  來客數 {code}：查無資料")
     if failed:
         log(f"  ⚠️  以下門市無人流資料，報表該欄將留空：{'、'.join(failed)}")
     return out
