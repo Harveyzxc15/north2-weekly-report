@@ -292,7 +292,7 @@ _JAVA_CP      = f"{_EPB_APP_ROOT}:{_EPB_LIB}"
 _TRANS_TYPE_MAP = {'A': '銷售', 'E': '銷退', 'G': '訂金', 'H': '尾款', 'J': '退訂'}
 
 
-def _run_epb_query(sql: str, timeout: int = 300, max_rows: int = 500_000) -> pd.DataFrame:
+def _run_epb_query(sql: str, timeout: int = 1200, max_rows: int = 500_000) -> pd.DataFrame:
     import csv, subprocess
     source = _EPB_APP_ROOT / 'EPBReportQuery.java'
     target = _EPB_APP_ROOT / 'EPBReportQuery.class'
