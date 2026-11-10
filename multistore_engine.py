@@ -594,6 +594,16 @@ def voucher_revenue(df: pd.DataFrame) -> int:
     return int(abs(df.loc[m, 'NET'].sum()))
 
 
+def drop_voucher_refill(df: pd.DataFrame) -> pd.DataFrame:
+    """去掉月底禮券回補（SA999 在月底入帳的禮券列，類別6 ∈ C6_VOUCHER）。
+    回補會讓含月底那週的總業績灌大數百萬，週對週比較時排除。
+    """
+    m = (df['員工代碼'] == VOUCHER_EXCL_EMP) & df['類別6代碼'].isin(C6_VOUCHER)
+    out = df[~m]
+    out.attrs = df.attrs
+    return out
+
+
 def accessory_by_c4(df: pd.DataFrame, sa_codes: set[str]) -> dict[float, int]:
     """配件 sheet 按類別4 加總銷售金額（類別3=3003, 排除 SA SKU）"""
     sub = df[(~df['存貨代碼'].isin(sa_codes)) & (df['類別3代碼'] == 3003.0)]

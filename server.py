@@ -275,13 +275,16 @@ def _fill_workbook(wk_end: date, log, use_full_month: bool = False,
     def pct(new, old):
         return round((new - old) / abs(old), 4) if old else 0.0
 
+    # 週區間（本週／上週／去年同週）排除月底禮券回補，週對週才看得出真實差異
+    df_cy_wk = eng.drop_voucher_refill(df_cy)
+    df_ly_wk = eng.drop_voucher_refill(df_ly)
     PERIODS = {
-        'wk':      (df_cy, WK_START,      wk_end),
-        'pw':      (df_cy, PW_START,      PW_END),
+        'wk':      (df_cy_wk, WK_START,      wk_end),
+        'pw':      (df_cy_wk, PW_START,      PW_END),
         'mtd':     (df_cy, MTD_START,     MTD_END),
         'pm_same': (df_cy, PM_SAME_START, PM_SAME_END),
         'pm':      (df_cy, PM_START,      PM_END),
-        'lyw':     (df_ly, LYW_START,     LYW_END),
+        'lyw':     (df_ly_wk, LYW_START,     LYW_END),
         'lymo':    (df_ly, LYMO_START,    LYMO_END),
         'qtd':     (df_cy, QTD_START,     QTD_END),
         'ytd_cy':  (df_cy, YTD_S_CY,      YTD_E_CY),
@@ -299,8 +302,8 @@ def _fill_workbook(wk_end: date, log, use_full_month: bool = False,
     MISC_WK = {}; MISC_PW = {}; MISC_MTD = {}
     for code in rows_stores:
         sc = None if code == 'ALL' else code
-        MISC_WK[code]  = eng.calc_misc_metrics(df_cy, WK_START, wk_end,    sc, sa_prices)
-        MISC_PW[code]  = eng.calc_misc_metrics(df_cy, PW_START, PW_END,    sc, sa_prices)
+        MISC_WK[code]  = eng.calc_misc_metrics(df_cy_wk, WK_START, wk_end,    sc, sa_prices)
+        MISC_PW[code]  = eng.calc_misc_metrics(df_cy_wk, PW_START, PW_END,    sc, sa_prices)
         MISC_MTD[code] = eng.calc_misc_metrics(df_cy, MTD_START, MTD_END,  sc, sa_prices)
 
     # 來客數：嘗試用 Playwright 自動登入 ShopperTrak 抓最新每日來客數，灌進快取
